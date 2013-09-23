@@ -53,6 +53,7 @@ typedef enum
 } ProtobufC_Events;
 
 #ifdef WIN32
+#include <winsock.h>
 typedef SOCKET ProtobufC_FD;
 #else
 typedef int ProtobufC_FD;

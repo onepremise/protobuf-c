@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2008-2011, Dave Benson.
- * 
+ *
  * All rights reserved.
- * 
+ *
  * Redistribution and use in source and binary forms, with
  * or without modification, are permitted provided that the
  * following conditions are met:
- * 
+ *
  * Redistributions of source code must retain the above
  * copyright notice, this list of conditions and the following
  * disclaimer.
@@ -70,7 +70,7 @@
 #ifdef WIN32
 # include <winsock.h>
 # define USE_POLL              0
-# define HAVE_SMALL_FDS            0
+# define HAVE_SMALL_FDS            1
 #endif
 #include <limits.h>
 #include <errno.h>
@@ -803,7 +803,7 @@ protobuf_c_dispatch_add_timer(ProtobufCDispatch *dispatch,
   rv->func_data = func_data;
   rv->dispatch = d;
   GSK_RBTREE_INSERT (GET_TIMER_TREE (d), rv, conflict);
-  
+
   /* is this the first element in the tree */
   for (at = rv; at != NULL; at = at->parent)
     if (at->parent && at->parent->right == at)

@@ -7,9 +7,26 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+
+#if defined(__MINGW32__)
+#   include<windows.h>
+    /* POSIX requires only at least 100 bytes */
+#   define UNIX_PATH_LEN   108
+
+    struct sockaddr_un {
+      unsigned short sun_family;              /* address family AF_LOCAL/AF_UNIX */
+      char           sun_path[UNIX_PATH_LEN]; /* 108 bytes of socket address     */
+    };
+
+    /* Evaluates the actual length of `sockaddr_un' structure. */
+#   define SUN_LEN(p) ((size_t)(((struct sockaddr_un *) NULL)->sun_path) \
+               + strlen ((p)->sun_path))
+#else
 #include <sys/un.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#endif
+
 #include <stdarg.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -111,13 +128,27 @@ struct _ProtobufC_RPC_Client
 static void begin_name_lookup (ProtobufC_RPC_Client *client);
 static void destroy_client_rpc (ProtobufCService *service);
 
+#if defined(__MINGW32__)
+int virSetPipeNonBlock(int fd)
+{
+    DWORD mode = PIPE_NOWAIT;
+    HANDLE handle = _get_osfhandle(fd);
+    BOOL result = SetNamedPipeHandleState(handle, &mode, NULL, NULL);
+
+    return result ? 0 : -1;
+}
+#endif
 
 static void
 set_fd_nonblocking(int fd)
 {
+#if defined(__MINGW32__)
+  return virSetPipeNonBlock(fd);
+#else
   int flags = fcntl (fd, F_GETFL);
   protobuf_c_assert (flags >= 0);
   fcntl (fd, F_SETFL, flags | O_NONBLOCK);
+#endif
 }
 
 static void
@@ -441,7 +472,7 @@ grow_closure_array (ProtobufC_RPC_Client *client)
   client->info.connected.closures = new_closures;
   client->info.connected.closures_alloced = new_size;
 }
-static uint32_t 
+static uint32_t
 uint32_to_le (uint32_t le)
 {
 #if IS_LITTLE_ENDIAN
@@ -646,7 +677,7 @@ invoke_client_rpc (ProtobufCService *service,
     case PROTOBUF_C_CLIENT_STATE_CONNECTING:
       enqueue_request (client, method_index, input, closure, closure_data);
       break;
-      
+
     case PROTOBUF_C_CLIENT_STATE_CONNECTED:
       {
         int had_outgoing = (client->outgoing.size > 0);
@@ -1275,12 +1306,12 @@ server_new_from_fd (ProtobufC_FD              listening_fd,
   server->proxy_extra_data_len = 0;
   strcpy (server->bind_name, bind_name);
   set_fd_nonblocking (listening_fd);
-  protobuf_c_dispatch_watch_fd (dispatch, listening_fd, PROTOBUF_C_EVENT_READABLE, 
+  protobuf_c_dispatch_watch_fd (dispatch, listening_fd, PROTOBUF_C_EVENT_READABLE,
                                 handle_server_listener_readable, server);
   return server;
 }
 
-/* this function is for handling the common problem 
+/* this function is for handling the common problem
    that we bind over-and-over again to the same
    unix path.
 
@@ -1351,7 +1382,11 @@ protobuf_c_rpc_server_new       (ProtobufC_RPC_AddressType type,
     case PROTOBUF_C_RPC_ADDRESS_LOCAL:
       protocol_family = PF_UNIX;
       memset (&addr_un, 0, sizeof (addr_un));
+#ifdef __MINGW32__
+      addr_un.sun_family = AF_UNIX;
+#else
       addr_un.sun_family = AF_LOCAL;
+#endif
       strncpy (addr_un.sun_path, name, sizeof (addr_un.sun_path));
       address_len = sizeof (addr_un);
       address = (struct sockaddr *) (&addr_un);
